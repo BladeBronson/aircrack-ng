@@ -77,6 +77,15 @@
 	GCRY_THREAD_OPTION_PTHREAD_IMPL;
 #endif
 
+#include <wiringPi.h>
+
+static volatile int doorCounter;
+int lastDoorCounter;
+
+void doorInterrupt (void) { 
+    ++doorCounter;
+}
+
 // in common.c
 extern int is_string_number(const char * str);
 
@@ -3025,6 +3034,9 @@ void dump_print( int ws_row, int ws_col, int if_num )
     int num_ap;
     int num_sta;
 
+    struct tm *ltime;
+	char cmd_str[512];
+
     if(!G.singlechan) columns_ap -= 4; //no RXQ in scan mode
     if(G.show_uptime) columns_ap += 15; //show uptime needs more space
 
@@ -3123,6 +3135,10 @@ void dump_print( int ws_row, int ws_col, int if_num )
               " ][%3d/%3d/%4d ",
               G.numaps, G.maxnumaps, G.maxaps);
     }
+        
+    snprintf( buffer, sizeof( buffer ) - 1,
+          " ][ Door has opened %d times.",
+          doorCounter);
 
     strncat(strbuf, buffer, (512-strlen(strbuf)));
     memset( buffer, '\0', 512 );
@@ -3148,7 +3164,7 @@ void dump_print( int ws_row, int ws_col, int if_num )
     memset( strbuf, ' ', ws_col - 1 );
     strbuf[ws_col - 1] = '\0';
     fprintf( stderr, "%s\n", strbuf );
-
+#if 0
     if(G.show_ap) {
 
     strbuf[0] = 0;
@@ -3215,7 +3231,6 @@ void dump_print( int ws_row, int ws_col, int if_num )
 		G.start_print_ap = 1;
     //	printf("%i\n", G.start_print_ap);
 	}
-
 
 	while( ap_cur != NULL )
 	{
@@ -3460,10 +3475,10 @@ void dump_print( int ws_row, int ws_col, int if_num )
 	strbuf[ws_col - 1] = '\0';
 	fprintf( stderr, "%s\n", strbuf );
     }
-
+#endif
     if(G.show_sta) {
 	memcpy( strbuf, " BSSID              STATION "
-		"           PWR   Rate    Lost    Frames  Probes", columns_sta );
+		"          FirstSeen  LastSeen  Status", columns_sta );
 	strbuf[ws_col - 1] = '\0';
 	fprintf( stderr, "%s\n", strbuf );
 
@@ -3512,6 +3527,12 @@ void dump_print( int ws_row, int ws_col, int if_num )
 
 	    while( st_cur != NULL )
 	    {
+
+		if( time( NULL ) - st_cur->tlast > 600 )
+		{
+			st_cur->greet_status = 3;
+		}
+
 		if( st_cur->base != ap_cur ||
 		    time( NULL ) - st_cur->tlast > G.berlin )
 		{
@@ -3547,7 +3568,54 @@ void dump_print( int ws_row, int ws_col, int if_num )
 			st_cur->stmac[0], st_cur->stmac[1],
 			st_cur->stmac[2], st_cur->stmac[3],
 			st_cur->stmac[4], st_cur->stmac[5] );
+        
+        if( st_cur->greet_status == 3) {
+            st_cur->greet_status = 0;
+            st_cur->tinit = st_cur->tlast;
+        }
+        
+        ltime = localtime( &st_cur->tinit );
 
+        fprintf( stderr, " %02d:%02d:%02d, ",
+                 ltime->tm_hour,  ltime->tm_min,  ltime->tm_sec );
+
+        ltime = localtime( &st_cur->tlast );
+
+        fprintf( stderr, " %02d:%02d:%02d, ",
+                 ltime->tm_hour,  ltime->tm_min,  ltime->tm_sec );
+
+        if( st_cur->greet_status == 0) {
+
+            fprintf( stderr, "%s", "  Ready" );
+
+        	if (lastDoorCounter != doorCounter) {
+
+        		sprintf( cmd_str, "/home/pi/%02X:%02X:%02X:%02X:%02X:%02X.mp3",
+					st_cur->stmac[0], st_cur->stmac[1],
+					st_cur->stmac[2], st_cur->stmac[3],
+					st_cur->stmac[4], st_cur->stmac[5] );
+
+				if( access( cmd_str, F_OK ) != -1 ) {
+	        		sprintf( cmd_str, "/usr/bin/omxplayer /home/pi/%02X:%02X:%02X:%02X:%02X:%02X.mp3 &",
+						st_cur->stmac[0], st_cur->stmac[1],
+						st_cur->stmac[2], st_cur->stmac[3],
+						st_cur->stmac[4], st_cur->stmac[5] );
+			        system(cmd_str);
+
+			        lastDoorCounter = doorCounter;
+		        	st_cur->greet_status = 4;
+				}
+
+			}
+
+        	if ( ( time( NULL ) - st_cur->tinit ) > 60 )
+        		st_cur->greet_status = 1;
+        } else if (st_cur->greet_status == 4) {
+            fprintf( stderr, "%s", "Greeted" );
+        } else
+            fprintf( stderr, "%s", " Steady" );
+
+#if 0
 		fprintf( stderr, "  %3d ", st_cur->power    );
 		fprintf( stderr, "  %2d", st_cur->rate_to/1000000  );
 		fprintf( stderr,  "%c", (st_cur->qos_fr_ds) ? 'e' : ' ');
@@ -3581,7 +3649,7 @@ void dump_print( int ws_row, int ws_col, int if_num )
 		    strbuf[ws_col - (columns_sta - 6)] = '\0';
 		    fprintf( stderr, " %s", strbuf );
 		}
-
+#endif
 		fprintf( stderr, "\n" );
 
 		st_cur = st_cur->prev;
@@ -6222,6 +6290,12 @@ int main( int argc, char *argv[] )
 #ifdef HAVE_PCRE
     G.f_essid_regex = NULL;
 #endif
+
+    doorCounter = 0;
+    lastDoorCounter = 0;
+    wiringPiSetup () ;
+    wiringPiISR (4, INT_EDGE_RISING, &doorInterrupt);
+    pullUpDnControl(4, PUD_UP);
 
 	// Default selection.
     resetSelection();

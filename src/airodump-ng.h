@@ -305,6 +305,7 @@ struct ST_info
     int qos_to_ds;           /* does it use 802.11e to ds */
     int qos_fr_ds;           /* does it receive 802.11e   */
     int channel;             /* Channel station is seen   */
+    unsigned char greet_status;
                              /*  Not used yet		  */
 };
 

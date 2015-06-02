@@ -142,7 +142,7 @@ aireplay-ng$(EXE): $(OBJS_AR) $(LIBOSD)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS_AR) -o $(@) $(LIBS) $(LIBSSL)
 
 airodump-ng$(EXE): $(OBJS_ADU) $(LIBOSD)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS_ADU) -o $(@) $(LIBS) $(LIBSSL) -lpthread $(LIBPCRE)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS_ADU) -o $(@) $(LIBS) $(LIBSSL) -lpthread $(LIBPCRE) -lwiringPi
 
 airserv-ng$(EXE): $(OBJS_AS) $(LIBOSD)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS_AS) -o $(@) $(LIBS)
