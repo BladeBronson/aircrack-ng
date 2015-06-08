@@ -82,7 +82,7 @@ LIBOSD		= $(OSD)/lib$(OSD).a
 
 LIBSSL		= -lssl -lcrypto
 ifeq ($(subst TRUE,true,$(filter TRUE true,$(gcrypt) $(GCRYPT))),true)
-	LIBSSL		= -lgcrypt $(LDFLAGS)
+	c		= -lgcrypt $(LDFLAGS)
 	CFLAGS 		+= -DUSE_GCRYPT
 	OBJS_AC		+= sha1-git.o
 	OBJS_AD		+= sha1-git.o
@@ -106,6 +106,8 @@ ifeq ($(subst TRUE,true,$(filter TRUE true,$(sqlite) $(SQLITE))),true)
 else
 	LIBSQL		=
 endif
+
+LIBWIREPI = -lwiringPi
 
 all: userland $(SBINFILES)
 
@@ -142,7 +144,7 @@ aireplay-ng$(EXE): $(OBJS_AR) $(LIBOSD)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS_AR) -o $(@) $(LIBS) $(LIBSSL)
 
 airodump-ng$(EXE): $(OBJS_ADU) $(LIBOSD)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS_ADU) -o $(@) $(LIBS) $(LIBSSL) -lpthread $(LIBPCRE) -lwiringPi
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS_ADU) -o $(@) $(LIBS) $(LIBSSL) -lpthread $(LIBPCRE) $(LIBWIREPI)
 
 airserv-ng$(EXE): $(OBJS_AS) $(LIBOSD)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS_AS) -o $(@) $(LIBS)

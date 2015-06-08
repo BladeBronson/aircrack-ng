@@ -77,7 +77,17 @@
 	GCRY_THREAD_OPTION_PTHREAD_IMPL;
 #endif
 
-#include <wiringPi.h>
+#ifdef USE_RASPBERRY_PI
+	#include <wiringPi.h>
+#endif
+
+void hookEntranceInterrupt() {
+#ifdef USE_RASPBERRY_PI
+	wiringPiSetup () ;
+    wiringPiISR (4, INT_EDGE_RISING, &doorInterrupt);
+    pullUpDnControl(4, PUD_UP);
+#endif
+}
 
 static volatile int doorCounter;
 int lastDoorCounter;
@@ -6293,9 +6303,8 @@ int main( int argc, char *argv[] )
 
     doorCounter = 0;
     lastDoorCounter = 0;
-    wiringPiSetup () ;
-    wiringPiISR (4, INT_EDGE_RISING, &doorInterrupt);
-    pullUpDnControl(4, PUD_UP);
+
+    hookEntranceInterrupt();
 
 	// Default selection.
     resetSelection();
