@@ -77,24 +77,27 @@
 	GCRY_THREAD_OPTION_PTHREAD_IMPL;
 #endif
 
-#ifdef USE_RASPBERRY_PI
-	#include <wiringPi.h>
-#endif
+
+/* Entrance Music --> */
+#include "entrance_music.h"
+#include <wiringPi.h>
+
+static volatile int doorOpenedAt;
+int doorCounter;
+int lastDoorCounter;
+
+void doorInterrupt (void) {
+	doorCounter++;
+    doorOpenedAt = time(NULL);
+}
 
 void hookEntranceInterrupt() {
-#ifdef USE_RASPBERRY_PI
 	wiringPiSetup () ;
     wiringPiISR (4, INT_EDGE_RISING, &doorInterrupt);
     pullUpDnControl(4, PUD_UP);
-#endif
 }
 
-static volatile int doorCounter;
-int lastDoorCounter;
-
-void doorInterrupt (void) { 
-    ++doorCounter;
-}
+/* <-- Entrance Music */
 
 // in common.c
 extern int is_string_number(const char * str);
@@ -1546,6 +1549,7 @@ int dump_add_packet( unsigned char *h80211, int caplen, struct rx_info *ri, int 
 
         st_cur->tinit = time( NULL );
         st_cur->tlast = time( NULL );
+        st_cur->greet_status = LETS_GREET_THIS_PERSON; /* Entrance Music */
 
         st_cur->power = -1;
         st_cur->rate_to = -1;
@@ -1581,6 +1585,13 @@ int dump_add_packet( unsigned char *h80211, int caplen, struct rx_info *ri, int 
     /* update the last time seen */
 
     st_cur->tlast = time( NULL );
+
+    /* Entrance Music --> */
+    if( st_cur->greet_status == THIS_PERSON_IS_NOT_AROUND) {
+        st_cur->greet_status = LETS_GREET_THIS_PERSON;
+        st_cur->tinit = time( NULL );
+    }
+    /* <-- Entrance Music */
 
     /* only update power if packets comes from the
      * client: either type == Mgmt and SA != BSSID,
@@ -3538,10 +3549,15 @@ void dump_print( int ws_row, int ws_col, int if_num )
 	    while( st_cur != NULL )
 	    {
 
-		if( time( NULL ) - st_cur->tlast > 600 )
+
+	    /* Entrance Music, check if station is still around --> */
+	    /* If station is away more than some time consider that person is gone */
+		if( (time( NULL ) - st_cur->tlast) > CONSIDER_PERSON_IS_GONE_THRESHOLD )
 		{
-			st_cur->greet_status = 3;
+			st_cur->greet_status = THIS_PERSON_IS_NOT_AROUND;
 		}
+		/*Entrance Music -->*/
+
 
 		if( st_cur->base != ap_cur ||
 		    time( NULL ) - st_cur->tlast > G.berlin )
@@ -3579,11 +3595,6 @@ void dump_print( int ws_row, int ws_col, int if_num )
 			st_cur->stmac[2], st_cur->stmac[3],
 			st_cur->stmac[4], st_cur->stmac[5] );
         
-        if( st_cur->greet_status == 3) {
-            st_cur->greet_status = 0;
-            st_cur->tinit = st_cur->tlast;
-        }
-        
         ltime = localtime( &st_cur->tinit );
 
         fprintf( stderr, " %02d:%02d:%02d, ",
@@ -3594,12 +3605,12 @@ void dump_print( int ws_row, int ws_col, int if_num )
         fprintf( stderr, " %02d:%02d:%02d, ",
                  ltime->tm_hour,  ltime->tm_min,  ltime->tm_sec );
 
-        if( st_cur->greet_status == 0) {
+        if( st_cur->greet_status == LETS_GREET_THIS_PERSON) {
 
             fprintf( stderr, "%s", "  Ready" );
 
-        	if (lastDoorCounter != doorCounter) {
-
+            if ( (lastDoorCounter != doorCounter) && ((time( NULL ) - doorOpenedAt) < 5) )
+            {
         		sprintf( cmd_str, "/home/pi/%02X:%02X:%02X:%02X:%02X:%02X.mp3",
 					st_cur->stmac[0], st_cur->stmac[1],
 					st_cur->stmac[2], st_cur->stmac[3],
@@ -3612,15 +3623,15 @@ void dump_print( int ws_row, int ws_col, int if_num )
 						st_cur->stmac[4], st_cur->stmac[5] );
 			        system(cmd_str);
 
-			        lastDoorCounter = doorCounter;
-		        	st_cur->greet_status = 4;
-				}
+					lastDoorCounter = doorCounter;
+		        	st_cur->greet_status = THIS_PERSON_IS_ALREADY_GREETED;
+				}       	
+            }
 
-			}
+        	if ( ( time( NULL ) - st_cur->tinit ) > CONSIDER_PERSON_IS_SETTLED_THRESHOLD )
+        		st_cur->greet_status = THIS_PERSON_IS_ALREADY_HERE;
 
-        	if ( ( time( NULL ) - st_cur->tinit ) > 60 )
-        		st_cur->greet_status = 1;
-        } else if (st_cur->greet_status == 4) {
+        } else if (st_cur->greet_status == THIS_PERSON_IS_ALREADY_GREETED) {
             fprintf( stderr, "%s", "Greeted" );
         } else
             fprintf( stderr, "%s", " Steady" );
@@ -6302,7 +6313,6 @@ int main( int argc, char *argv[] )
 #endif
 
     doorCounter = 0;
-    lastDoorCounter = 0;
 
     hookEntranceInterrupt();
 
